@@ -1,0 +1,11 @@
+#meta
+matchtype: splitid
+columns:SplitId A700001(string(20)) A700002(int) A700003(numeric) Volume(Q2010-2015)
+
+#new_rows
+10: volume(1000)
+20: A70001(123)
+
+#rows
+:splitId(124) volume(1000)
+:splitId(33) A700001(0.22) A700002(123) volume(100)
