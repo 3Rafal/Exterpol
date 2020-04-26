@@ -6,10 +6,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Parser.fs" />
-        <Compile Include="DataGenerator.fs" />
+        <Compile Include="Parsing.fs" />
+        <Compile Include="Validation.fs" />
+        <Compile Include="DataGeneration.fs" />
         <Compile Include="Program.fs" />
         <None Include="tests.fsx" />
+        <Content Include="data.txt" />
+        <Content Include="data.csv" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,56 +1,33 @@
 module App.Parser
 
-#if INTERACTIVE
-#r @"./bin/Debug/netcoreapp3.1/FParsecCS.dll"
-#r @"./bin/Debug/netcoreapp3.1/FParsec.dll"
-#endif
-
 open System
 open FParsec
-open System.IO
 
 ///////
-// Meta
+// Columns
 //////
+
 type Frequency =
     | Annual
     | Quarterly
     | Monthly
-
-type Year = uint32
-type Range = { start : Year; finish : Year}
+    
+type Range = { start : int; finish : int}
 
 type AttributeType =
     | String of length : int
     | Integer
     | Numeric
-    
+
+type Attribute = {
+    name : string
+    dataType : AttributeType
+} 
 type Column =
     | SplitId 
-    | Attribute of name : string * dataType : AttributeType
+    | Attribute of Attribute
     | Volume of frequency : Frequency * range : Range
-    
-type Match =
-    | SplitId
-    | Attribute
-    
-type Meta = {
-    matchType : Match
-    columns : List<Column>    
-}
 
-let test p str =
-    match run p str with
-    | Success(result, _, _)   -> printfn "Success: %A" result
-    | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
-
-
-let parseMatchType : Parser<Match,unit> =
-    skipString "matchType:"
-    >>. many (skipString " ")
-    >>. (stringCIReturn "splitId"  SplitId) <|> (stringCIReturn "attribute" Attribute)
-    .>> spaces
-    
 let skipParens x = skipString"(" >>. x .>> skipString ")"
 let parseAttributeType : Parser<AttributeType,unit> =
     (stringCIReturn "int" Integer)
@@ -61,14 +38,14 @@ let parseAttributeType : Parser<AttributeType,unit> =
 let parseAttributeName : Parser<string,unit> = (skipStringCI "a" >>. pint32 >>= (fun x -> preturn (string ("A" + string x))))
     
 let parseAttribute : Parser<Column,unit> =
-    pipe2 parseAttributeName parseAttributeType (fun n t -> Column.Attribute (n, t))
+    pipe2 parseAttributeName parseAttributeType (fun n t -> Column.Attribute {name = n; dataType = t})
 
 let parseVolumeFrequency : Parser<Frequency,unit> =
     (stringCIReturn "Y" Annual)
     <|> (stringCIReturn "Q" Quarterly)
     <|> (stringCIReturn "M" Monthly)
 let parseVolumeRange : Parser<Range,unit> =
-    pipe2 (puint32 .>> skipString "-") puint32 (fun s f -> {start = s; finish = f})
+    pipe2 (pint32 .>> skipString "-") pint32 (fun s f -> {start = s; finish = f})
     
 let parseVolume : Parser<Column,unit> =
     skipStringCI "volume("
@@ -80,26 +57,25 @@ let parseColumn : Parser<Column,unit> =
     <|> parseAttribute 
     <|> (parseVolume)
 
-let parseColumns : Parser<Column list,unit> =
-    skipStringCI "columns:"
-    >>. many (skipString " ")
-    >>. sepBy parseColumn (pchar ' ')
-
 let parseHeader header : Parser<unit,unit> =
     spaces
     >>. skipStringCI header 
     .>> spaces
     
-let parseMeta : Parser<Meta,unit> =
-    pipe3 (parseHeader "#meta") parseMatchType parseColumns (fun _ m c -> {matchType = m; columns = c})
+let commaWithSpaces : Parser<char,unit> =
+    many (pchar ' ' ) >>. pchar ',' .>> many (pchar ' ')
+    
+let parseColumns : Parser<Column list,unit> =
+    (parseHeader "#columns")
+    >>. sepBy1 parseColumn commaWithSpaces 
+    .>> spaces
     
 //////////
 // Rows //
 //////////
-
-type VolumeCell = int
-//| Exact of int
-//| Random of min : int * max : int
+type VolumeCell = 
+    | Exact of int
+    | Random of min : int * max : int
     
 type AttributeCellValue =
     | Integer of int
@@ -121,7 +97,6 @@ type RowCell =
     | RowSplitId of int
     | RowAttribute of AttributeCell
     | RowVolume of VolumeCell
-    
 type Row = RowCell list
 type NewRowCount = int
 type NewRow = {
@@ -129,30 +104,32 @@ type NewRow = {
     cells : NewRowCell list
 }
 
-//let parseRandom : Parser<VolumeCell, unit> =
-//    pipe2
-//        (skipStringCI "(random(" >>. pint32 .>> skipStringCI "-")
-//        (pint32 .>> skipStringCI "))")
-//        (fun x y -> Random (x, y))
+let parseRandom : Parser<VolumeCell, unit> =
+    pipe2
+        (skipStringCI "(" >>. pint32 .>> skipStringCI "-")
+        (pint32 .>> skipStringCI ")")
+        (fun x y -> Random (x, y))
         
 let parseExact : Parser<VolumeCell,unit> =
-    skipParens pint32 //|>> Exact
+    pchar '(' >>. pint32 |>> Exact .>> pchar ')'
 
 // TODO: must be a better way        
 let parseRowVolume : Parser<VolumeCell,unit> =
-    (skipStringCI "volume" >>. parseExact)// <|>
-    //(skipStringCI "volume" >>. parseRandom)
+    (attempt (skipStringCI "volume" >>. parseExact))
+    <|> (skipStringCI "volume" >>. parseRandom)
 
-let skipQuotationMarks x = skipString"\"" >>. x .>> skipString "\""
 let parseAttributeCellValue : Parser<AttributeCellValue,unit> =
-    (pfloat |>> Numeric)
-    <|> (pint32 |>> Integer)
-    <|> ((manyChars (noneOf"\"")) |> skipQuotationMarks  |>> String)
+    (attempt (pchar '(' >>. pint32 |>> Integer .>> pchar ')'))
+    <|> (attempt (pchar '(' >>. pfloat |>> Numeric .>> pchar ')'))
+    <|> (pstring "(\"" >>. (manyChars (noneOf"\"")) |>> String .>> pstring "\")")
+
+let attributeName (char : char, id) =
+    (string char) + id
 let parseAttributeCell : Parser<AttributeCell,unit> =
     pipe2
-        ((satisfy (fun x -> x = 'A')) >>. (manyChars (noneOf "(")))
-        (parseAttributeCellValue |> skipParens)
-        (fun x y -> {name = x; value = y} )
+        ((satisfy (fun x -> x = 'A')) .>>. (manyChars (noneOf "(")))
+        (parseAttributeCellValue)
+        (fun x y -> {name = (attributeName x); value = y} )
 
 let parseNewRowCell : Parser<NewRowCell,unit> =
     (parseAttributeCell |>> NewRowAttribute)
@@ -160,7 +137,7 @@ let parseNewRowCell : Parser<NewRowCell,unit> =
     
 let parseNewRowCells : Parser<NewRowCell list,unit> =
     many (skipString " ")
-    >>. sepBy parseNewRowCell (pchar ' ')
+    >>. sepBy parseNewRowCell commaWithSpaces 
 
 let parseNewRowCount : Parser<NewRowCount,unit> =
     pint32
@@ -170,9 +147,9 @@ let parseNewRowCount : Parser<NewRowCount,unit> =
 let parseNewRow : Parser<NewRow,unit> =
     pipe2 parseNewRowCount parseNewRowCells (fun c v -> {count = c; cells = v})
 
-let parseNewRows : Parser<NewRow list,unit> =
+let parseNewRows : Parser<NewRow list Option,unit> =
     parseHeader "#new_rows"
-    >>. (many (parseNewRow .>> spaces))
+    >>. opt(many (parseNewRow .>> spaces))
     
 let parseSplitId : Parser<SplitId,unit> =
     skipStringCI "splitId"
@@ -184,24 +161,22 @@ let parseRowCell : Parser<RowCell,unit> =
     <|> (parseSplitId |>> RowSplitId)
     
 let parseRow : Parser<Row,unit> =
-    pchar ':'
-    >>. (sepBy parseRowCell (pchar ' '))
+    (sepBy1 parseRowCell commaWithSpaces) .>> spaces
 
-let parseRows : Parser<Row list,unit> =
+let parseRows : Parser<Row list Option,unit> =
     parseHeader "#rows"
-    >>. many (parseRow)
+    >>. opt(many (parseRow))
     
 type Data = {
-    meta : Meta
-    newRows : NewRow list
-    rows : Row list
+    columns : Column list
+    newRows : NewRow list Option
+    rows : Row list Option
 }
 
-let pData : Parser<Data,unit> =
-    pipe3 parseMeta parseNewRows parseRows (fun m n r -> {meta=m; newRows=n; rows=r})
-    
+let pData =
+    pipe3 parseColumns parseNewRows parseRows (fun c n r -> ({columns = c; newRows = n; rows =r }))
+
 let parseData str =
     match run pData str with
-    | Success (v, _, _) -> v
-    | Failure (msg,_,_) -> failwith msg 
-
+    | Success(data, _, _) -> data
+    | Failure(errorMsg, _, _) -> failwith errorMsg
