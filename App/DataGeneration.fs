@@ -64,7 +64,8 @@ let randomAttribute attributeType =
     match attributeType with
     | AttributeType.String len -> randomString len
     | AttributeType.Integer -> System.Random().Next() |> string
-    | AttributeType.Numeric -> System.Random().NextDouble() |> string
+    | AttributeType.Numeric -> System.Random().NextDouble() |> (*) 1000000.0 |> fun x -> Math.Round(x, 6) |> string
+    | AttributeType.DateTime -> System.DateTime.Now.ToShortDateString() 
         
 // TODO: n*k complexity? or is it auto-optimised?
 let multiplyVolume data value =
@@ -87,6 +88,7 @@ let attributeValueToString value =
     | Integer i -> i |> string
     | Numeric n -> n |> string
     | String s -> s
+    | DateTime d -> d |> string
 
 let volumeValueToString data vol =
     match vol with
