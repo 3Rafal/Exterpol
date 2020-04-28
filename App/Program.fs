@@ -1,8 +1,9 @@
 ﻿open System.IO
+
 open App
-open Parser
-open DataGenerator
-open Validation
+open FileParser
+open Validator
+open CSVGenerator
 
 [<EntryPoint>]
 let main argv =
