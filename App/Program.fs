@@ -7,7 +7,7 @@ open Validation
 [<EntryPoint>]
 let main argv =
     let csv = File.ReadAllText @"C:\Users\Rafal.Gwozdzinski\RiderProjects\Exterpol\App\data.txt"
-            |> parseData
+              |> parseData
               |> validate
               |> createCSV
     File.WriteAllText (@"C:\Users\Rafal.Gwozdzinski\RiderProjects\Exterpol\App\data.csv", csv)

@@ -3,17 +3,7 @@ module App.Parser
 open System
 open FParsec
 
-///////
-// Columns
-//////
-
-type Frequency =
-    | Annual
-    | Quarterly
-    | Monthly
-    
-type Range = { start : int; finish : int}
-
+// COlumns
 type AttributeType =
     | String of length : int
     | Integer
@@ -24,15 +14,28 @@ type Attribute = {
     name : string
     dataType : AttributeType
 }
+
+type Frequency =
+    | Annual
+    | Quarterly
+    | Monthly
+    
+type Range = { start : int; finish : int}
 type Volume = {
     frequency : Frequency
     range : Range
 }
+type Rate = {
+    frequency : Frequency
+    range : Range
+}
 type Column =
-    | SplitId 
+    | SplitId
+    | ParentId
     | Attribute of Attribute
     | Volume of Volume
-
+    | Rate of Rate
+    
 let skipParens x = skipString"(" >>. x .>> skipString ")"
 let parseAttributeType : Parser<AttributeType,unit> =
     (stringCIReturn "int" Integer)
@@ -50,23 +53,27 @@ let parseVolumeFrequency : Parser<Frequency,unit> =
     (stringCIReturn "Y" Annual)
     <|> (stringCIReturn "Q" Quarterly)
     <|> (stringCIReturn "M" Monthly)
-let parseVolumeRange : Parser<Range,unit> =
+let parseRange : Parser<Range,unit> =
     pipe2 (pint32 .>> skipString "-") pint32 (fun s f -> {start = s; finish = f})
     
 let parseVolume : Parser<Column,unit> =
     skipStringCI "volume("
-    >>. pipe2 parseVolumeFrequency parseVolumeRange (fun f r -> Volume {frequency=f; range=r})
+    >>. pipe2 parseVolumeFrequency parseRange (fun f r -> Volume {frequency=f; range=r})
     .>> skipStringCI")"
-    
+
+let parseRate : Parser<Column,unit> =
+    skipStringCI "rate("
+    >>. pipe2 parseVolumeFrequency parseRange (fun f r -> Rate {frequency=f; range=r})
+    .>> skipStringCI")"
 let parseColumn : Parser<Column,unit> =
-    (stringCIReturn "splitId" Column.SplitId)
+    (stringCIReturn "splitId" SplitId)
+    <|> (stringCIReturn "parentId" ParentId)
     <|> parseAttribute 
-    <|> (parseVolume)
+    <|> parseVolume
+    <|> parseRate
 
 let parseHeader header : Parser<unit,unit> =
-    spaces
-    >>. skipStringCI header 
-    .>> spaces
+    skipStringCI header .>> spaces
     
 let commaOrSpaces : Parser<unit,unit> =
     skipMany1 (anyOf " ,")
@@ -99,8 +106,6 @@ type ExistingRow = RowCells
 type Row =
     | NewRow of NewRow
     | ExistingRow of ExistingRow
-        
-// TODO: must be a better way        
 
 let commaSpaceOrNewline : Parser<char,unit> = pchar ' ' <|> pchar ',' <|> pchar '\n'
 
@@ -117,19 +122,19 @@ let parseDateTime : Parser<DateTime,unit> =
                                                     | true,result -> preturn result
                                                     | false,_ -> fail "")) // TODO: fail msg?
     
-let commaOrTab : Parser<unit,unit> = skipAnyOf " \t"
+let commaOrTab : Parser<unit,unit> = skipAnyOf ",\t"
 let backtrackingSepBy1 p sep = pipe2 p (many (sep >>? p)) (fun hd tl -> hd::tl)
-let parseCellValue : Parser<CellValue,unit> =
-    (attempt (parseDateTime |>> DateTime))
-    <|> (attempt (pint32 |>> Integer .>> followedBy (spaces1 <|> skipChar ',' )))
+let parseCell : Parser<CellValue,unit> =
+    (attempt (pint32 |>> Integer .>> followedBy (spaces1 <|> skipChar ',' )))
     <|> (attempt (pfloat |>> Numeric))
+    <|> (attempt (parseDateTime |>> DateTime))
     <|> (attempt (pchar '*' >>= (fun _ -> preturn CellValue.Random)))
     <|> ((many1Chars (noneOf ",\t")) |>> String)
 
 let parseCells : Parser<RowCells,unit> =
     spaces >>. 
     ((parseRandomCells)
-     <|> ((sepBy1 parseCellValue commaOrTab) |>> CellValues))
+     <|> ((sepBy1 parseCell commaOrTab) |>> CellValues))
     .>> spaces
     
 let parseNewRow : Parser<Row,unit> =

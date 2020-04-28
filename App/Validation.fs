@@ -17,7 +17,9 @@ let validateAttribute attr cell =
 
 let validateCell column cell =
     match (column, cell) with
+    | (_,CellValue.Random) -> ()
     | (SplitId, Integer _) -> ()
+    | (ParentId, Integer _) -> ()
     | (Attribute a, _) -> validateAttribute a.dataType cell
     | (Volume _, Integer _) -> ()
     | (_,_) -> failwith (sprintf "Invalid column value: %A" cell)
@@ -37,5 +39,5 @@ let validateRowAttributes columns rows =
     rows |> List.iter (fun x -> x |> cells |> (validateCells columns))
 
 let validate data =
-    //data.rows |> validateRowAttributes data.columns
+//    data.rows |> validateRowAttributes data.columns
     data

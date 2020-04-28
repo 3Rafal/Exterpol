@@ -3,30 +3,32 @@ module App.DataGenerator
 open System
 open Parser
 
-let annualVolumes range =
-    [for x in range.start .. range.finish -> sprintf "Y%d_volume" x]
+let annualRange range suffix =
+    [for x in range.start .. range.finish -> sprintf "Y%d_%s" x suffix]
 
-let quarterlyVolumes range =
+let quarterlyRange range suffix =
     [for y in range.start .. range.finish do
      for q in 1 .. 4
-     -> sprintf "Q%d_%d_volume" q y]
+     -> sprintf "Q%d_%d_%s" q y suffix]
 
-let monthlyVolumes range =
+let monthlyRange range suffix =
     [for y in range.start .. range.finish do
      for m in 1 .. 12 
-     -> sprintf "M%d_%d_volume" m y]
+     -> sprintf "M%d_%d_%s" m y suffix]
 
-let volumeNames volume =
-    match volume.frequency with
-    | Annual -> annualVolumes volume.range
-    | Quarterly -> quarterlyVolumes volume.range
-    | Monthly -> monthlyVolumes volume.range
+let rangeNames frequency range suffix =
+    match frequency with
+    | Annual -> annualRange range suffix
+    | Quarterly -> quarterlyRange range suffix
+    | Monthly -> monthlyRange range suffix
     
 let columnNames column =
     match column with
-    | Column.SplitId -> ["SplitId"]
-    | Column.Attribute a -> [a.name]
-    | Column.Volume v -> volumeNames v 
+    | SplitId -> ["SplitId"]
+    | ParentId -> ["ParentId"]
+    | Attribute a -> [a.name]
+    | Volume v -> rangeNames v.frequency v.range "volume"
+    | Rate r -> rangeNames r.frequency r.range "rate"
     
 let header data =
     data.columns
@@ -54,24 +56,31 @@ let randomAttribute attributeType =
     | AttributeType.Numeric -> System.Random().NextDouble() |> (*) 1000000.0 |> fun x -> Math.Round(x, 6) |> string
     | AttributeType.DateTime -> System.DateTime.Now |> dateTimeString
         
-let volumeCount volume =
-    let years = volume.range.finish - volume.range.start
-    years * (volumesInYear volume.frequency)
+let rangeCount range frequency =
+    let years = range.finish - range.start + 1
+    years * (volumesInYear frequency)
     
-let multiplyVolume volume value =
-    let count = volumeCount volume
+let multiplyRange range frequency value =
+    let count = rangeCount range frequency
     seq { for _ in 1..count -> value}
     |> String.concat ","
 let randomColumnValue column =
     match column with
     | Column.SplitId -> 0 |> string
+    | ParentId -> 0 |> string
     | Column.Attribute a -> randomAttribute a.dataType
-    | Column.Volume v -> System.Random().Next() |> string |> multiplyVolume v
+    | Column.Volume v -> System.Random().Next() |> string |> multiplyRange v.range v.frequency 
+    | Column.Rate r -> 0.0 |> string |> multiplyRange r.range r.frequency
 
 let valueToString column value =
     match value with
-    | Integer i -> i |> string
-    | Numeric n -> n |> string
+    | Integer i -> match column with
+                   | Volume v -> i |> string |> multiplyRange v.range v.frequency
+                   | Rate r -> i |> string |> multiplyRange r.range r.frequency
+                   | _ -> i |> string
+    | Numeric n -> match column with
+                   | Rate r -> n |> string |> multiplyRange r.range r.frequency
+                   | _ -> n |> string
     | String s -> s
     | DateTime d -> d |> dateTimeString
     | CellValue.Random -> randomColumnValue column
