@@ -8,33 +8,34 @@ let attrMap columns =
                                | _ -> acc) []
     |> Map.ofList
 
-let validateAttribute (attrMap : Map<string,Attribute>, cell) =
-    match (attrMap.[cell.name].dataType, cell.value) with
-    | (AttributeType.Integer, AttributeCellValue.Integer _) -> ()
-    | (AttributeType.Numeric, AttributeCellValue.Numeric _) -> ()
-    | (AttributeType.String _, AttributeCellValue.String _) -> ()
-    | (_,_) -> failwith (sprintf "Invalid attribute value: %A" cell.value)
-    
-let newAttributeCells cells =
-    cells
-    |> List.fold (fun acc x -> match x with
-                               | NewRowAttribute a -> a :: acc
-                               | _ -> acc) []
-        
-let attributeCells cells =
-    cells
-    |> List.fold (fun acc x -> match x with
-                               | RowAttribute a -> a :: acc
-                               | _ -> acc) []
-let validateNewRowAttributes newRows columns =
-    let aMap = attrMap columns
-    newRows |> List.iter (fun x -> x.cells |> newAttributeCells |> List.iter (fun x -> validateAttribute (aMap, x)))
+let validateAttribute attr cell =
+    match (attr, cell) with
+    | (AttributeType.Integer , Integer _) -> ()
+    | (AttributeType.Numeric, Numeric _) -> ()
+    | (AttributeType.String len, String s) -> if s.Length > len then failwith (sprintf "Too long string %s" s)
+    | (_,_) -> failwith (sprintf "Invalid attribute value: %A" cell)
 
-let validateRowAttributes (rows : Row list, columns) =
-    let aMap = attrMap columns
-    rows |> List.iter (fun x -> x |> attributeCells |> List.iter (fun x -> validateAttribute (aMap, x)))
+let validateCell column cell =
+    match (column, cell) with
+    | (SplitId, Integer _) -> ()
+    | (Attribute a, _) -> validateAttribute a.dataType cell
+    | (Volume _, Integer _) -> ()
+    | (_,_) -> failwith (sprintf "Invalid column value: %A" cell)
+
+let validateCells columns cells =
+    let validateForColumn cells col = cells |> List.iter (validateCell col)
+    match cells with
+    | Random -> ()
+    | CellValues c -> columns |> List.iter (validateForColumn c)
+    
+let cells row =
+    match row with
+    | NewRow n -> n.cells 
+    | ExistingRow e -> e
+    
+let validateRowAttributes columns rows =
+    rows |> List.iter (fun x -> x |> cells |> (validateCells columns))
 
 let validate data =
-    data.newRows |> Option.iter (fun x -> validateNewRowAttributes x data.columns)
-    data.rows |> Option.iter (fun x -> validateRowAttributes (x, data.columns))
+    //data.rows |> validateRowAttributes data.columns
     data

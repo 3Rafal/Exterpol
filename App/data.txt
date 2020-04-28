@@ -1,10 +1,5 @@
-#columns
-SplitId, A700001(string(20)), A700002(int), A700003(numeric), Volume(Q2010-2015)
-
-#new_rows
-10: volume(1000)
-100: A700002(1206), A700003(12.03), volume(30-100)
-
-#rows
-splitId(124), volume(1000)
-splitId(33), A700001("0.22"), A700002(123), volume(100)
+SplitId, A700001(string(20)), A700002(int), A700003(datetime), Volume(Q2013-2015)
+10: ** 
+103	root01	1	7/1/2013	2000
+104	root02	2	7/1/2013	4000
+105	root03	3	7/1/2013	2000

@@ -16,17 +16,17 @@ let monthlyVolumes range =
      for m in 1 .. 12 
      -> sprintf "M%d_%d_volume" m y]
 
-let volumeNames frequency range =
-    match frequency with
-    | Annual -> annualVolumes range
-    | Quarterly -> quarterlyVolumes range
-    | Monthly -> monthlyVolumes range
+let volumeNames volume =
+    match volume.frequency with
+    | Annual -> annualVolumes volume.range
+    | Quarterly -> quarterlyVolumes volume.range
+    | Monthly -> monthlyVolumes volume.range
     
 let columnNames column =
     match column with
     | Column.SplitId -> ["SplitId"]
     | Column.Attribute a -> [a.name]
-    | Column.Volume (f,r) -> volumeNames f r
+    | Column.Volume v -> volumeNames v 
     
 let header data =
     data.columns
@@ -40,117 +40,70 @@ let volumesInYear freq =
     | Quarterly -> 4
     | Monthly -> 12
     
-let volumeCount freq range =
-    let years = range.finish - range.start
-    years * (volumesInYear freq)
-
-let findVolumeCount data =
-    data.columns
-    |> List.map (fun x -> match x with
-                              | Volume (f,r) -> Some (volumeCount f r)
-                              | _ -> None)
-    |> List.tryFind Option.isSome
-    |> function
-       | Some v -> Option.get v
-       | None -> 0
-    
 let randomString n : string = 
     let r = System.Random()
     let chars = Array.concat([[|'a' .. 'z'|];[|'A' .. 'Z'|];[|'0' .. '9'|]])
     let sz = Array.length chars in
     new String(Array.init n (fun _ -> chars.[r.Next sz]))
-    
+
+let dateTimeString (dateTime : System.DateTime) = dateTime.ToString("MM/dd/yyyy")
 let randomAttribute attributeType =
     match attributeType with
     | AttributeType.String len -> randomString len
     | AttributeType.Integer -> System.Random().Next() |> string
     | AttributeType.Numeric -> System.Random().NextDouble() |> (*) 1000000.0 |> fun x -> Math.Round(x, 6) |> string
-    | AttributeType.DateTime -> System.DateTime.Now.ToShortDateString() 
+    | AttributeType.DateTime -> System.DateTime.Now |> dateTimeString
         
-// TODO: n*k complexity? or is it auto-optimised?
-let multiplyVolume data value =
-    let count = findVolumeCount data
+let volumeCount volume =
+    let years = volume.range.finish - volume.range.start
+    years * (volumesInYear volume.frequency)
+    
+let multiplyVolume volume value =
+    let count = volumeCount volume
     seq { for _ in 1..count -> value}
     |> String.concat ","
-let missingColumnValue data column =
+let randomColumnValue column =
     match column with
     | Column.SplitId -> 0 |> string
     | Column.Attribute a -> randomAttribute a.dataType
-    | Column.Volume (_,_) -> System.Random().Next() |> string |> multiplyVolume data
-    
-type RowCellKey =
-    | SplitId
-    | Attribute of name : string
-    | Volume
+    | Column.Volume v -> System.Random().Next() |> string |> multiplyVolume v
 
-let attributeValueToString value =
+let valueToString column value =
     match value with
     | Integer i -> i |> string
     | Numeric n -> n |> string
     | String s -> s
-    | DateTime d -> d |> string
+    | DateTime d -> d |> dateTimeString
+    | CellValue.Random -> randomColumnValue column
 
-let volumeValueToString data vol =
-    match vol with
-    | Exact v -> v
-    | Random (s, f) -> System.Random().Next(s,f)
-    |> string
-    |> multiplyVolume data
+let allRandom columns =
+    columns |> List.map (fun x -> valueToString x CellValue.Random)
     
-let newCellsToMap cells data =
-    cells
+let row columns row =
+    (match row with
+    | Random -> allRandom columns
+    | CellValues c -> List.zip columns c
+                      |> List.map (fun (x,y)-> valueToString x y)) |> String.concat ","
+    
+let newRowSplitId = 0 |> string
+let newRowAllRandom columns =
+    columns
     |> List.map (fun x -> match x with
-                          | NewRowCell.NewRowAttribute a -> (Attribute a.name, a.value |> attributeValueToString)
-                          | NewRowCell.NewRowVolume v -> (Volume, v |> volumeValueToString data))
-    |> Map.ofList
-let cellsToMap cells data =
-    cells
+                          | SplitId -> newRowSplitId
+                          | _ -> valueToString x CellValue.Random )
+let newRow columns row =
+    (match row with
+    | Random -> newRowAllRandom columns
+    | CellValues c -> List.zip columns c
+                      |> List.map (fun (x,y)-> match x with
+                                               | SplitId -> newRowSplitId
+                                               | _ -> valueToString x y)) |> String.concat ","
+    
+let rowString data =
+    data.rows
     |> List.map (fun x -> match x with
-                          | RowCell.RowAttribute a -> (Attribute a.name, a.value |> attributeValueToString)
-                          | RowCell.RowVolume v -> (Volume, v |> volumeValueToString data)
-                          | RowCell.RowSplitId s -> (SplitId, s |> string))
-    |> Map.ofList
+                          | NewRow n -> [for _ in 1..n.count -> (newRow data.columns n.cells)]
+                          | ExistingRow e -> [row data.columns e])
+    |> List.concat
 
-let columnToKey column =
-    match column with
-    | Column.SplitId -> SplitId
-    | Column.Attribute a -> Attribute a.name
-    | Column.Volume (_,_) -> Volume
-
-let newRow data row =
-    let map = newCellsToMap row data
-    data.columns
-    |> List.map (fun c -> match map.TryFind (columnToKey c) with
-                          | Some s -> s
-                          | None -> missingColumnValue data c)
-    |> String.concat "," 
-    
-let row data row =
-    let map = cellsToMap row data
-    data.columns
-    |> List.map (fun c -> match map.TryFind (columnToKey c) with
-                          | Some s -> s
-                          | None -> missingColumnValue data c)
-    |> String.concat ","
-    
-let newRows data =
-    match data.newRows with
-    | Some s -> s
-                |> List.map (fun x -> [ for _ in 1..x.count -> (newRow data x.cells)])
-                |> List.concat
-    | None -> []
-    
-let rows data =
-    match data.rows with
-    | Some s -> s |> List.map (fun x -> row data x)
-    | None -> []
-
-let createCSV data =
-    [header data]
-    @ match data.newRows with
-      | Some _ -> newRows data
-      | None -> []
-    @ match data.rows with
-      | Some _ -> rows data
-      | None -> []
-    |> String.concat "\n"
+let createCSV data = (header data) :: (rowString data) |> String.concat "\n"
