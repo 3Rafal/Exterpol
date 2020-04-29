@@ -13,3 +13,14 @@ let test p str =
     match run p str with
     | Success(result, _, _)   -> printfn "Success: %A" result
     | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
+
+open System.IO
+
+let numCsv start count =
+    let header = "SplitId,ParentId,A701001(string(20)),A701002(int),A701003(datetime),Rate(Q2014-2015)"
+    let csv = header
+              :: [for i in start..(start + count - 1) -> sprintf "10: *,%d,*,*,*,10" i]
+              |> String.concat "\n"
+    File.WriteAllText (@"C:\Users\Rafal.Gwozdzinski\RiderProjects\Exterpol\App\data.txt", csv)
+    
+    

@@ -14,6 +14,7 @@
         <None Include="tests.fsx" />
         <Content Include="data.txt" />
         <Content Include="data.csv" />
+        <Content Include="readme.md" />
     </ItemGroup>
 
     <ItemGroup>
