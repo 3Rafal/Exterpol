@@ -21,7 +21,6 @@ module Columns =
         | Monthly
         
     type Range = { start : int; finish : int}
-    
     type DateRange = {
         frequency : Frequency
         range : Range

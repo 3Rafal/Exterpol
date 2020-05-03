@@ -6,7 +6,8 @@ module Validator =
         | (AttributeType.Integer , Integer _) -> ()
         | (AttributeType.Numeric, Numeric _) -> ()
         | (AttributeType.DateTime, DateTime _) -> ()
-        | (AttributeType.String len, String s) -> if s.Length > len then failwith (sprintf "Too long string %s" s)
+        | (AttributeType.String len, String s) -> if s.Length > len
+                                                  then failwith (sprintf "Too long string %s" s)
         | (_,_) -> failwith (sprintf "Invalid attribute value: %A" cell)
 
     let validateCell (column, cell) =

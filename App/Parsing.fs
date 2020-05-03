@@ -13,17 +13,23 @@ module ColumnParser =
         <|> (stringCIReturn "datetime" DateTime)
         |> skipParens
         
-    let parseAttributeName : Parser<string,unit> = (skipStringCI "a" >>. pint32 >>= (fun x -> preturn (string ("A" + string x))))
+    let parseAttributeName : Parser<string,unit> =
+        skipStringCI "a"
+        >>. pint32 >>= (fun x -> preturn (string ("A" + string x)))
         
     let parseAttribute : Parser<Column,unit> =
-        pipe2 parseAttributeName parseAttributeType (fun n t -> Column.Attribute {name = n; dataType = t})
+        pipe2 parseAttributeName
+              parseAttributeType
+              (fun n t -> Column.Attribute {name = n; dataType = t})
 
     let parseVolumeFrequency : Parser<Frequency,unit> =
         (stringCIReturn "Y" Annual)
         <|> (stringCIReturn "Q" Quarterly)
         <|> (stringCIReturn "M" Monthly)
     let parseRange : Parser<Range,unit> =
-        pipe2 (pint32 .>> skipString "-") pint32 (fun s f -> {start = s; finish = f})
+        pipe2 (pint32 .>> skipString "-")
+               pint32
+               (fun s f -> {start = s; finish = f})
         
     let parseVolume : Parser<Column,unit> =
         skipStringCI "volume("
@@ -34,6 +40,7 @@ module ColumnParser =
         skipStringCI "rate("
         >>. pipe2 parseVolumeFrequency parseRange (fun f r -> Rate {frequency=f; range=r})
         .>> skipStringCI")"
+        
     let parseColumn : Parser<Column,unit> =
         (stringCIReturn "splitId" SplitId)
         <|> (stringCIReturn "parentId" ParentId)

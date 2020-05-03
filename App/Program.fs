@@ -5,13 +5,13 @@ open FileParser
 open Validator
 open CSVGenerator
 
-let generate csv = csv |> parseData |> validate |> createCSV
+let generate txt = txt |> parseData |> validate |> createCSV
     
 [<EntryPoint>]
 let main argv =
-    let csv = File.ReadAllText @"C:\Users\Rafal.Gwozdzinski\RiderProjects\Exterpol\App\data.txt"
+    let csv = File.ReadAllText @"..\..\..\data.txt"
               |> generate
-    File.WriteAllText (@"C:\Users\Rafal.Gwozdzinski\RiderProjects\Exterpol\App\data.csv", csv)
+    File.WriteAllText (@"..\..\..\data.csv", csv)
     0
     
 
